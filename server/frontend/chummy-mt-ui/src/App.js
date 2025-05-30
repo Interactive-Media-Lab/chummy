@@ -1,23 +1,18 @@
-import logo from './logo.svg';
-import './App.css';
+
 
 function App() {
   return (
     <div className="App">
       <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
+        <h1>Chummy MT UI</h1>
+        <p>Welcome to the Chummy Music Therapy User Interface!</p>
       </header>
+      <main>
+        <p>This is a placeholder for the main content of the application.</p>
+      </main>
+      <footer>
+        <p>&copy; 2025 Summer Chummy MT Team</p>
+      </footer>
     </div>
   );
 }
