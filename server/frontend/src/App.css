@@ -1,0 +1,198 @@
+html,
+body {
+    height: 100%;
+    margin: 0;
+    background-color: rgb(215, 215, 215);
+}
+
+/* Full view centering */
+.center-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    padding-top: 40px;
+}
+
+.outer-box{ 
+    background-color: #ffffff;
+    border-radius: 15px;
+    box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.5);
+    width: 80%;
+    padding: 10px 20px;
+    text-align: left;
+}
+
+/* Home Page */
+.floorplan .room-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
+  margin: 20px 0;
+}
+
+.room-card {
+  background-color: #b5ebf5;
+  padding: 12px;
+  border-radius: 8px;
+  box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.1);
+  position: relative;
+  cursor: pointer;
+}
+
+.room-card:hover {
+  background-color: #a0d8e6;
+}
+
+.room-name {
+  font-weight: bold;
+  font-size: 18px;
+}
+
+.room-status {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+}
+
+.legend {
+  display: flex;
+  gap: 20px;
+  margin-top: 20px;
+  font-size: 14px;
+}
+
+.dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 5px;
+  border-radius: 3px;
+}
+
+/* Room Page */
+.room-grid-2col {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+  margin-top: 20px;
+  align-items: start;
+}
+
+
+.left-panel {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  padding-left: 30%;
+  justify-content: flex-start;
+}
+
+.right-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: left;
+  align-items: flex-start;
+}
+
+.patient-photo {
+  width: 200px;
+  height: 280px;
+  object-fit: cover;
+  border-radius: 12px;
+  background-color: #eee;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.section {
+  margin-top: 30px;
+  align-items: center;
+}
+
+.upload-btn {
+  margin-top: 20px;
+  padding: 10px 16px;
+  background: #436ee6;
+  color: white;
+  font-weight: bold;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* Music Plaer */
+.player-card{
+  width: 20rem;
+  background-color: ffffff;
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.music-photo{
+  width: 320px;
+  height: 150px;
+  object-fit: cover;
+  padding-top: 10px;
+}
+
+input[type="range"] {
+  width: 100%;
+  height: 5px;
+  accent-color: #436ee6;
+  outline: none;
+}
+
+.track-duration {
+  display: flex;;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.track-duration > p {
+  font-size: 13px;
+  font-weight: 500;
+  color: #555;
+  margin: 0;
+}
+
+.play-pause-btn {
+  width: 3rem;
+  height: 3rem;
+  font-size: 34px;
+  font-weight: 600;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #436ee6;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  margin: 5px auto 10px auto;
+}
+
+@media (max-width: 768px) {
+  .room-grid-2col {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .right-panel {
+    margin-top: 20px;
+    justify-content: center;
+  }
+
+  .left-panel {
+    padding: 0;
+    align-items: center;
+  }
+
+  .player-card {
+    width: 100%;
+    max-width: 320px;
+  }
+}
