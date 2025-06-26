@@ -1,131 +1,227 @@
 import "../App.css";
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
-const SingleVersion = ({audioSrc}) => {
-        // State variables to manage player's status and current time
-        const [isPlaying, setIsPlaying] = useState(false);
-        const [currentTime, setCurrentTime] = useState(0);
-        const [duration, setDuration] = useState(0);
+const SingleVersion = ({ audioSrc }) => {
+  const bpsdEvents = [
+  { time: '2:03 PM, Jun 13, 2025', status: 'for 40 sec', effect: "✅ Effective", song: 'Awake' },
+  { time: '11:34 AM, Jun 13, 2025', status: 'for 1 min 23 sec', effect: "✅ Effective", song: 'I Came Running' },
+  { time: '8:46 AM, Jun 12, 2025', status: 'for 12 sec', effect: "❌ Ineffective", song: 'Intro',
+    status2: 'for 1 min 5 sec', effect2: "✅ Effective", song2: 'Courage' },
+  { time: '7:39 AM, Jun 10, 2025', status: 'for 3 min 11 sec', effect: "✅ Effective", song: 'Night Drive' },
+];
 
-        const audioRef = useRef(null);
 
-        // Function to seek to a specific time in the audio track
-        const handleSeek = (e) => {
-            audioRef.current.currentTime = e.target.value;
-            setCurrentTime(e.target.value);
-        }
+  // --- Playlist state ---
+  const [playlists, setPlaylists] = useState({
+    'Playlist A': ['Awake', 'Intro', 'Courage'],
+    'Playlist B': ['Night Drive', 'I Came Running']
+  });
+  const [currentPlaylist, setCurrentPlaylist] = useState('Playlist A');
+  const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
 
-        // Function to update the current time and duration of the audio track
-        const handleTimeUpdate = () => {
-            setCurrentTime(audioRef.current.currentTime);
-            setDuration(audioRef.current.duration);
-        }
+  // --- Audio state & ref (unchanged) ---
+  const [isPlaying, setIsPlaying]     = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration]       = useState(0);
+  const audioRef = useRef(null);
 
-        // Function to handle playing the audio
-        const handlePlay = () => {
-            audioRef.current.play();
-            setIsPlaying(true);
-        }
+  // --- Handlers for audio (unchanged) ---
+  const handleSeek = e => {
+    audioRef.current.currentTime = e.target.value;
+    setCurrentTime(e.target.value);
+  };
 
-        // Function to handle pausing the audio
-        const handlePause = () => {
-            audioRef.current.pause();
-            setIsPlaying(false);
-        }
+  const handleTimeUpdate = () => {
+    setCurrentTime(audioRef.current.currentTime);
+    setDuration(audioRef.current.duration);
+  };
 
-        // Function to handle play/pause functionality
-        const handlePlayPause = () => {
-            if (isPlaying) {
-                handlePause();
-            } else {
-                handlePlay();
-            }
-        }
+  const handlePlay = () => {
+    audioRef.current.play();
+    setIsPlaying(true);
+  };
 
-        // Function to format time in MM:SS format
-        function formatTime(seconds) {
-            const minutes = Math.floor(seconds / 60);
-            const secs = Math.floor(seconds % 60);
-            const formattedSeconds = secs.toString().padStart(2, '0');
-            return `${minutes}:${formattedSeconds}`;
-        }
+  const handlePause = () => {
+    audioRef.current.pause();
+    setIsPlaying(false);
+  };
 
-        // Use an effect to listen for time updates on the audio element
-        React.useEffect(() => {
-            const audio = audioRef.current;
-            if (!audio) return;
+  const handlePlayPause = () => {
+    if (isPlaying) handlePause();
+    else handlePlay();
+  };
 
-            audio.addEventListener('timeupdate', handleTimeUpdate);
+  function formatTime(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  }
 
-            return () => {
-                // Clean up only if ref is still valid
-                if (audio) {
-                    audio.removeEventListener('timeupdate', handleTimeUpdate);
-                }
-            };
-        }, []);
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    return () => audio.removeEventListener('timeupdate', handleTimeUpdate);
+  }, []);
 
-    return (
-        <div className="center-wrapper">
-            <div className="outer-box">
-                <h1 style={{ textAlign:"center"}}>Room Dashboard (Single-chummy)</h1>
-                <div className="room-grid-2col">
-                <div className="left-panel">
-                    <p><strong>Patient Name:</strong> xxx</p>
-                    <p><strong>Current Status:</strong> <span className="dot" style={{ backgroundColor: "limegreen" }} />Normal</p>
+  // --- Handlers for playlist management ---
+  const handleSelectPlaylist = e => {
+    setCurrentPlaylist(e.target.value);
+    setCurrentTrackIndex(0);
+  };
 
-                    <p><strong>Special note:</strong> None</p>
-                    <div className="section">
-                    <label><strong>Currently playing:    </strong></label>
-                    <select defaultValue="Playlist A">
-                        <option>Playlist A</option>
-                        <option>Playlist B</option>
-                    </select>
-                    </div>
+  const handleDeleteSong = idx => {
+    setPlaylists(prev => {
+      const arr = [...prev[currentPlaylist]];
+      arr.splice(idx, 1);
+      return { ...prev, [currentPlaylist]: arr };
+    });
+    if (idx === currentTrackIndex) setCurrentTrackIndex(0);
+  };
 
-                    <div className="player-card">
-                        <img src='/Music-Cover.jpg' alt="Music Cover" className="music-photo"/>
-                        {/* Input range for seeking within the audio track */}
-                        <input
-                            type="range"
-                            min="0"
-                            max={duration}
-                            value={currentTime}
-                            onChange={handleSeek}
-                            />
+  const handleMoveSongUp = idx => {
+    if (idx === 0) return;
+    setPlaylists(prev => {
+      const arr = [...prev[currentPlaylist]];
+      [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+      return { ...prev, [currentPlaylist]: arr };
+    });
+    if (currentTrackIndex === idx) setCurrentTrackIndex(idx - 1);
+  };
 
-                        {/*Audio element for playing music*/}
-                        <audio ref={audioRef} src={audioSrc} />
+  const handleMoveSongDown = idx => {
+    const len = playlists[currentPlaylist].length;
+    if (idx === len - 1) return;
+    setPlaylists(prev => {
+      const arr = [...prev[currentPlaylist]];
+      [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
+      return { ...prev, [currentPlaylist]: arr };
+    });
+    if (currentTrackIndex === idx) setCurrentTrackIndex(idx + 1);
+  };
 
-                        {/* Display current and total duration of track */}
-                        <div className="track-duration">
-                            <p>{formatTime(currentTime)}</p>
-                            <p>{formatTime(duration)}</p>
-                        </div>
-                        {/* Play/Pause button */}
-                        <button onClick={handlePlayPause} className="play-pause-btn">
-                            <span class="material-symbols-rounded">
-                                {isPlaying ? "pause" : "play_arrow"}
-                            </span>
-                        </button>
-                    </div>
-                </div>
+  const handleRenameSong = idx => {
+    const newName = prompt('Enter new filename:', playlists[currentPlaylist][idx]);
+    if (!newName) return;
+    setPlaylists(prev => {
+      const arr = [...prev[currentPlaylist]];
+      arr[idx] = newName;
+      return { ...prev, [currentPlaylist]: arr };
+    });
+  };
 
-                <div className="right-panel">
-                    <img src="/Default-photo.jpg" alt="Default Patient" className="patient-photo" />
-                    <div className="section">
-                    <label><strong>Upload new music to:    </strong></label>
-                    <select>
-                        <option>Playlist A</option>
-                        <option>Playlist B</option>
-                    </select>
-                    <div><button className="upload-btn" onClick={() => alert("Open Upload Popup")}>Upload</button></div>
-                    </div>
-                </div>
-                </div>
+  // --- UI render ---
+  return (
+    <div className="center-wrapper">
+      <div className="outer-box">
+        <h1 style={{ textAlign: 'center' }}>Room Dashboard (Single-chummy)</h1>
+
+        <div className="room-grid-2col">
+          {/* BPSD Event Log */}
+          <div className="bpsd-panel">
+            <h2>BPSD Event Log</h2>
+            <div className="bpsd-log">
+              {bpsdEvents.map((event, i) => (
+            <div className="bpsd-entry" key={i}>
+                <p className="bpsd-time">{event.time}</p>
+                <p>🎵 Played <strong>{event.song || '—'}</strong> {event.status} - {event.effect}</p>
+                        {event.effect === '❌ Ineffective' && event.song2 && (
+              <p>🎵 Played <strong>{event.song2}</strong> {event.status2} – {event.effect2}</p>
+            )}
             </div>
+            ))}
+
+            </div>
+          </div>
+
+          {/* Player & Playlist Management */}
+          <div className="right-panel">
+            <p>
+              <strong>Client Name:</strong> xxx</p>
+              <p><strong>Current Status:</strong>{' '}
+              <span className="dot" style={{ backgroundColor: 'limegreen' }} /> Normal
+            </p>
+
+            {/* Select & Show Status */}
+              <label style={{marginBlock: '10px' }}><strong>Currently playing:</strong></label>
+              <select value={currentPlaylist} onChange={handleSelectPlaylist}>
+                {Object.keys(playlists).map(pl => (
+                  <option key={pl}>{pl}</option>
+                ))}
+              </select>
+              <p>
+                <strong>Now Playing:</strong>{' '}
+                {playlists[currentPlaylist][currentTrackIndex]}
+              </p>
+            
+
+            {/* Track list with delete, reorder, rename */}
+            <div>
+              <label><strong>Manage Tracks:</strong></label>
+              <ul style={{ listStyle: 'none', padding: 0 }}>
+                {playlists[currentPlaylist].map((song, idx) => (
+                  <li
+                    key={idx}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: '6px'
+                    }}
+                  >
+                    <span>{idx + 1}. {song}</span>
+                    <div>
+                      <button onClick={() => handleMoveSongUp(idx)} disabled={idx === 0}>↑</button>
+                      <button
+                        onClick={() => handleMoveSongDown(idx)}
+                        disabled={idx === playlists[currentPlaylist].length - 1}
+                      >↓</button>
+                      <button onClick={() => handleRenameSong(idx)}>✏️</button>
+                      <button onClick={() => handleDeleteSong(idx)}>🗑️</button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Audio player */}
+            <div className="player-card">
+              <input
+                type="range"
+                min="0"
+                max={duration}
+                value={currentTime}
+                onChange={handleSeek}
+              />
+              <audio ref={audioRef} src={audioSrc} />
+              <div className="track-duration">
+                <p>{formatTime(currentTime)}</p>
+                <p>{formatTime(duration)}</p>
+              </div>
+              <button onClick={handlePlayPause} className="play-pause-btn">
+                <span className="material-symbols-rounded">
+                  {isPlaying ? 'pause' : 'play_arrow'}
+                </span>
+              </button>
+
+              <label><strong>Upload new music to:</strong></label>
+              <select>
+                {Object.keys(playlists).map(pl => (
+                  <option key={pl}>{pl}</option>
+                ))}
+              </select>
+              <div>
+                <button
+                  className="upload-btn"
+                  onClick={() => alert('Open Upload Popup')}
+                >Upload</button>
+              </div>
+            </div>
+          </div>
         </div>
-    );
-}
+      </div>
+    </div>
+  );
+};
 
 export default SingleVersion;

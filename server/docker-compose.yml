@@ -1,0 +1,62 @@
+services:
+  # MySQL Database
+  database:
+    image: mysql:9.3
+    container_name: chummy_database
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: chummy_db
+      MYSQL_USER: chummy_user
+      MYSQL_PASSWORD: chummy_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./database:/var/lib/mysql
+    networks:
+      - chummy_network
+
+  # Backend API
+  backend:
+    build: ./backend
+    container_name: chummy_backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=development
+      - PORT=5000
+      - DB_HOST=database
+      - DB_PORT=3306
+      - DB_NAME=chummy_db
+      - DB_USER=chummy_user
+      - DB_PASSWORD=chummy_pass
+      - FRONTEND_URL=http://localhost:3000
+    depends_on:
+      - database
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - chummy_network
+
+  # Frontend React App
+  frontend:
+    build: ./frontend
+    container_name: chummy_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:5000/api
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - chummy_network
+
+networks:
+  chummy_network:
+    driver: bridge

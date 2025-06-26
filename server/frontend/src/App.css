@@ -76,44 +76,57 @@ body {
 /* Room Page */
 .room-grid-2col {
   display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 20px;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
   margin-top: 20px;
   align-items: start;
 }
 
 
-.left-panel {
+.bpsd-panel {
+  padding-left: 40px;
+  padding: 10px;
+  border-radius: 10px;
+  max-height: 400px;
+  overflow-y: auto;
+  font-size: 14px;
+  overflow-y: auto;
+}
+
+.bpsd-log {
   display: flex;
   flex-direction: column;
-  text-align: left;
-  padding-left: 30%;
-  justify-content: flex-start;
+  gap: 10px;
+}
+
+.bpsd-entry {
+  padding: 8px 10px;
+  background-color: #f6f6f6;
+  border-radius: 8px;
+  box-shadow: 3px 3px 3px rgba(0, 0, 0, 0.1);
+}
+
+.bpsd-time {
+  margin: 0;
+  font-size: 20px;
+  font-weight: bold;
+  color: #333;
 }
 
 .right-panel {
   display: flex;
   flex-direction: column;
-  justify-content: left;
-  align-items: flex-start;
-}
-
-.patient-photo {
-  width: 200px;
-  height: 280px;
-  object-fit: cover;
-  border-radius: 12px;
-  background-color: #eee;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  justify-content: flex-start;
 }
 
 .section {
-  margin-top: 30px;
-  align-items: center;
+  margin: 20px;
+  flex-direction: column;
+  text-align: center;
 }
 
 .upload-btn {
-  margin-top: 20px;
+  margin-top: 10px;
   padding: 10px 16px;
   background: #436ee6;
   color: white;
@@ -121,6 +134,7 @@ body {
   border: none;
   border-radius: 8px;
   cursor: pointer;
+  font-family: 'Times New Roman', Times, serif;
 }
 
 /* Music Plaer */
@@ -129,13 +143,8 @@ body {
   background-color: ffffff;
   border-radius: 0.5rem;
   padding: 1rem;
-}
-
-.music-photo{
-  width: 320px;
-  height: 150px;
-  object-fit: cover;
-  padding-top: 10px;
+  align-self: center;
+  text-align: center;
 }
 
 input[type="range"] {
@@ -146,7 +155,7 @@ input[type="range"] {
 }
 
 .track-duration {
-  display: flex;;
+  display: flex;
   align-items: center;
   justify-content: space-between;
   margin-top: 10px;
@@ -172,7 +181,7 @@ input[type="range"] {
   border: none;
   border-radius: 50%;
   cursor: pointer;
-  margin: 5px auto 10px auto;
+  margin: 5px auto 20px auto;
 }
 
 @media (max-width: 768px) {
@@ -180,12 +189,7 @@ input[type="range"] {
     grid-template-columns: 1fr;
     justify-items: center;
   }
-
-  .right-panel {
-    margin-top: 20px;
-    justify-content: center;
-  }
-
+  
   .left-panel {
     padding: 0;
     align-items: center;
