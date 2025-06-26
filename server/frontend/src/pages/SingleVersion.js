@@ -12,12 +12,11 @@ const SingleVersion = ({ audioSrc }) => {
 
 
   // --- Playlist state ---
-  const [playlists, setPlaylists] = useState({
-    'Playlist A': ['Awake', 'Intro', 'Courage'],
-    'Playlist B': ['Night Drive', 'I Came Running']
-  });
-  const [currentPlaylist, setCurrentPlaylist] = useState('Playlist A');
+  const [playlists, setPlaylists] = useState({});
+  const [currentPlaylist, setCurrentPlaylist] = useState('');
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   // --- Audio state & ref (unchanged) ---
   const [isPlaying, setIsPlaying]     = useState(false);
@@ -64,6 +63,40 @@ const SingleVersion = ({ audioSrc }) => {
     return () => audio.removeEventListener('timeupdate', handleTimeUpdate);
   }, []);
 
+  // Fetch playlists from backend API
+  useEffect(() => {
+    const fetchPlaylists = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch("http://raspberrypi:5000/playlists");
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        setPlaylists(data);
+        
+        // Set first available playlist as current
+        const playlistNames = Object.keys(data);
+        if (playlistNames.length > 0) {
+          setCurrentPlaylist(playlistNames[0]);
+        }
+        
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching playlists:', err);
+        setError('Failed to load playlists');
+        // Fallback to empty playlists
+        setPlaylists({});
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPlaylists();
+  }, []);
+
   // --- Handlers for playlist management ---
   const handleSelectPlaylist = e => {
     setCurrentPlaylist(e.target.value);
@@ -71,6 +104,7 @@ const SingleVersion = ({ audioSrc }) => {
   };
 
   const handleDeleteSong = idx => {
+    if (!playlists[currentPlaylist]) return;
     setPlaylists(prev => {
       const arr = [...prev[currentPlaylist]];
       arr.splice(idx, 1);
@@ -80,7 +114,7 @@ const SingleVersion = ({ audioSrc }) => {
   };
 
   const handleMoveSongUp = idx => {
-    if (idx === 0) return;
+    if (idx === 0 || !playlists[currentPlaylist]) return;
     setPlaylists(prev => {
       const arr = [...prev[currentPlaylist]];
       [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
@@ -90,6 +124,7 @@ const SingleVersion = ({ audioSrc }) => {
   };
 
   const handleMoveSongDown = idx => {
+    if (!playlists[currentPlaylist]) return;
     const len = playlists[currentPlaylist].length;
     if (idx === len - 1) return;
     setPlaylists(prev => {
@@ -101,6 +136,7 @@ const SingleVersion = ({ audioSrc }) => {
   };
 
   const handleRenameSong = idx => {
+    if (!playlists[currentPlaylist]) return;
     const newName = prompt('Enter new filename:', playlists[currentPlaylist][idx]);
     if (!newName) return;
     setPlaylists(prev => {
@@ -142,47 +178,57 @@ const SingleVersion = ({ audioSrc }) => {
               <span className="dot" style={{ backgroundColor: 'limegreen' }} /> Normal
             </p>
 
-            {/* Select & Show Status */}
-              <label style={{marginBlock: '10px' }}><strong>Currently playing:</strong></label>
-              <select value={currentPlaylist} onChange={handleSelectPlaylist}>
-                {Object.keys(playlists).map(pl => (
-                  <option key={pl}>{pl}</option>
-                ))}
-              </select>
-              <p>
-                <strong>Now Playing:</strong>{' '}
-                {playlists[currentPlaylist][currentTrackIndex]}
-              </p>
+            {loading && <p>Loading playlists...</p>}
+            {error && <p style={{ color: 'red' }}>Error: {error}</p>}
             
+            {!loading && !error && Object.keys(playlists).length > 0 && (
+              <>
+                {/* Select & Show Status */}
+                <label style={{marginBlock: '10px' }}><strong>Currently playing:</strong></label>
+                <select value={currentPlaylist} onChange={handleSelectPlaylist}>
+                  {Object.keys(playlists).map(pl => (
+                    <option key={pl} value={pl}>{pl}</option>
+                  ))}
+                </select>
+                <p>
+                  <strong>Now Playing:</strong>{' '}
+                  {(playlists[currentPlaylist] && playlists[currentPlaylist][currentTrackIndex]) || 'No track selected'}
+                </p>
+              
+                {/* Track list with delete, reorder, rename */}
+                <div>
+                  <label><strong>Manage Tracks:</strong></label>
+                  <ul style={{ listStyle: 'none', padding: 0 }}>
+                    {playlists[currentPlaylist] && playlists[currentPlaylist].map((song, idx) => (
+                      <li
+                        key={idx}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          marginBottom: '6px'
+                        }}
+                      >
+                        <span>{idx + 1}. {song}</span>
+                        <div>
+                          <button onClick={() => handleMoveSongUp(idx)} disabled={idx === 0}>↑</button>
+                          <button
+                            onClick={() => handleMoveSongDown(idx)}
+                            disabled={idx === playlists[currentPlaylist].length - 1}
+                          >↓</button>
+                          <button onClick={() => handleRenameSong(idx)}>✏️</button>
+                          <button onClick={() => handleDeleteSong(idx)}>🗑️</button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </>
+            )}
 
-            {/* Track list with delete, reorder, rename */}
-            <div>
-              <label><strong>Manage Tracks:</strong></label>
-              <ul style={{ listStyle: 'none', padding: 0 }}>
-                {playlists[currentPlaylist].map((song, idx) => (
-                  <li
-                    key={idx}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: '6px'
-                    }}
-                  >
-                    <span>{idx + 1}. {song}</span>
-                    <div>
-                      <button onClick={() => handleMoveSongUp(idx)} disabled={idx === 0}>↑</button>
-                      <button
-                        onClick={() => handleMoveSongDown(idx)}
-                        disabled={idx === playlists[currentPlaylist].length - 1}
-                      >↓</button>
-                      <button onClick={() => handleRenameSong(idx)}>✏️</button>
-                      <button onClick={() => handleDeleteSong(idx)}>🗑️</button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {!loading && !error && Object.keys(playlists).length === 0 && (
+              <p>No playlists found. Make sure your music directory contains MP3 files or folders with MP3 files.</p>
+            )}
 
             {/* Audio player */}
             <div className="player-card">
@@ -207,7 +253,7 @@ const SingleVersion = ({ audioSrc }) => {
               <label><strong>Upload new music to:</strong></label>
               <select>
                 {Object.keys(playlists).map(pl => (
-                  <option key={pl}>{pl}</option>
+                  <option key={pl} value={pl}>{pl}</option>
                 ))}
               </select>
               <div>
