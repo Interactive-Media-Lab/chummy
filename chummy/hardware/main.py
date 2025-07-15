@@ -5,7 +5,7 @@ import os
 import RPi.GPIO as GPIO
 
 # Paths and Constants
-MUSIC_DIR = "/home/pi/Music"
+MUSIC_DIR = "/home/suzen/Music" # Change to your pi zero music directory, e.g. /home/pi/Music
 DEBOUNCE_TIME = 0.5 # Time in seconds to ignore additional presses
 
 # GPIO Pins
@@ -28,18 +28,27 @@ GPIO.setup(PAUSE_BUTTON, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 pygame.mixer.init()
 pygame.mixer.music.set_volume(1.0) # Set volume to max
 
-# Load all .mp3 files from the MUSIC_DIR
-songs = sorted([f for f in os.listdir(MUSIC_DIR) if f.endswith('.mp3')])
-if not songs:
-    raise RuntimeError("No .mp3 files found in the MUSIC_DIR")
+# Load channels and songs
+channels = sorted([d for d in os.listdir(MUSIC_DIR) if os.path.isdir(os.path.join(MUSIC_DIR, d))])
+if not channels:
+    raise RuntimeError(f"No channels (folders) found in the {MUSIC_DIR}")
+# Map each channel folders to a list of songs
+tracks = {}
+for ch in channels:
+    path = os.path.join(MUSIC_DIR, ch)
+    songs = sorted([f for f in os.listdir(path) if f.endswith('.mp3') or f.endswith('.wav')])
+    if not songs:
+        raise RuntimeError(f"No songs found in channel {ch} at {path}")
+    tracks[ch] = songs
 
 # Default State
 mode = "radio"  # Default mode is radio, change to "mt" for music therapy mode
-current_index = 0
+current_channel = 0 # index into channels
+current_track = 0 # index into tracks
 paused = False
 
 # Debounce tracking
-last_times = {"red": 0.0, "green": 0.0, "pause": 0.0, "rot": 0.0} # timestamp of the last accepted event for each control
+last_times = {"red": 0.0, "green": 0.0, "pause": 0.0, "clk": 0.0} # timestamp of the last accepted event for each control
 last_states = {
     "red": GPIO.HIGH,
     "green": GPIO.HIGH,
@@ -48,25 +57,29 @@ last_states = {
 } # previous GPIO readings, so we can detect edges
 
 # Helper functions
-# Builds the path to the song based on the current index
-def song_path(idx):
-    return os.path.join(MUSIC_DIR, songs[idx])
+def get_current_path():
+    ch = channels[current_channel]
+    fname = tracks[ch][current_track]
+    return os.path.join(MUSIC_DIR, ch, fname)
 
 # Play the current song
 def play_current():
-    pygame.mixer.music.load(song_path(current_index))
+    path = get_current_path()
+    pygame.mixer.music.load(path)
     pygame.mixer.music.play()
-    print(f"[Radio] Playing: {songs[current_index]}")
+    print(f"[Radio] Playing: {channels[current_channel]}: {tracks[channels[current_channel]][current_track]}")
 
-# Play the next or previous song in the list
-def next_song():
-    global current_index
-    current_index = (current_index + 1) % len(songs) # Wrap around to the first song if at the end
+def next_track():
+    global current_track
+    tl = tracks[channels[current_channel]]
+    current_track = (current_track + 1) % len(tl)  # Loop back to the first song
     play_current()
 
-def prev_song():
-    global current_index
-    current_index = (current_index - 1) % len(songs)
+# Play the next or previous channel of songs
+def switch_channel(delta):
+    global current_channel, current_track
+    current_channel = (current_channel + delta) % len(channels)  # Wrap around
+    current_track = 0  # Reset to the first song in the new channel
     play_current()
 
 # Pause or resume playback
@@ -77,7 +90,7 @@ def toggle_pause():
         print("[Radio] Resumed")
     else:
         pygame.mixer.music.pause()
-        print("[Radi0] Paused")
+        print("[Radio] Paused")
     paused = not paused
 
 # Mode switching logic
@@ -88,7 +101,7 @@ def switch_to_mt():
     print("[Mode] -> Music Therapy Mode")
 
     '''
-    @Farbod You can start/edit your code from here regardng music therapy mode (when red button is pressed)
+    @Farbod You can start/edit your code from here regarding music therapy mode (when red button is pressed)
     
     
     '''
@@ -100,7 +113,7 @@ def switch_to_radio():
     play_current()  # Start playing the first song in radio mode
 
 # Start playback
-print(f"Found {len(songs)} songs. Starting in RADIO mode.")
+print(f"Found channels: {channels}\nStarting in RADIO mode")
 play_current()
 
 # Main loop to handle button presses and rotary encoder
@@ -129,12 +142,12 @@ try:
         # Radio mode controls
         if mode == "radio":
             # Rotary encoder rotation -> next/previous song
-            if clk_state != last_states["clk"] and now - last_times["rot"] >= DEBOUNCE_TIME:
-                if dt_state != clk_state: # means we turned in one direction (next song)
-                    next_song()
+            if clk_state != last_states["clk"] and now - last_times["clk"] >= DEBOUNCE_TIME:
+                if dt_state != clk_state: # means we turned in one direction (next channel)
+                    switch_channel(+1)
                 else:
-                    prev_song() # means we turned in the other direction (previous song)
-                last_times["rot"] = now
+                    switch_channel(-1) # means we turned in the other direction (previous channel)
+                last_times["clk"] = now
             last_states["clk"] = clk_state
 
             # Pause/resume playback, uses the same high -> low transition debounce pattern
@@ -145,10 +158,10 @@ try:
 
             # Auto-advance when a track ends
             if not pygame.mixer.music.get_busy() and not paused:
-                next_song()
+                next_track()
 
-            # Sleep a bit to avoid busy-waiting
-            time.sleep(0.1)
+        # Sleep a bit to avoid busy-waiting
+        time.sleep(0.05)
   
 except KeyboardInterrupt:
     print("Exiting...")
