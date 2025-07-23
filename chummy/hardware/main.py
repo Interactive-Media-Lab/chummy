@@ -3,9 +3,11 @@ import pygame
 import time
 import os
 import RPi.GPIO as GPIO
+import requests
 
 # Paths and Constants
 MUSIC_DIR = "/home/suzen/Music" # Change to your pi zero music directory, e.g. /home/pi/Music
+MT_MUSIC_DIR = "/music/mt"
 DEBOUNCE_TIME = 0.5 # Time in seconds to ignore additional presses
 
 # GPIO Pins
@@ -28,18 +30,23 @@ GPIO.setup(PAUSE_BUTTON, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 pygame.mixer.init()
 pygame.mixer.music.set_volume(1.0) # Set volume to max
 
+def load_music(music_directory):
+    """Loads music channels and tracks from a directory."""
+    channels = sorted([d for d in os.listdir(music_directory) if os.path.isdir(os.path.join(music_directory, d))])
+    if not channels:
+        raise RuntimeError(f"No channels (folders) found in the {music_directory}")
+    
+    tracks = {}
+    for ch in channels:
+        path = os.path.join(music_directory, ch)
+        songs = sorted([f for f in os.listdir(path) if f.endswith('.mp3') or f.endswith('.wav')])
+        if not songs:
+            raise RuntimeError(f"No songs found in channel {ch} at {path}")
+        tracks[ch] = songs
+    return channels, tracks
+
 # Load channels and songs
-channels = sorted([d for d in os.listdir(MUSIC_DIR) if os.path.isdir(os.path.join(MUSIC_DIR, d))])
-if not channels:
-    raise RuntimeError(f"No channels (folders) found in the {MUSIC_DIR}")
-# Map each channel folders to a list of songs
-tracks = {}
-for ch in channels:
-    path = os.path.join(MUSIC_DIR, ch)
-    songs = sorted([f for f in os.listdir(path) if f.endswith('.mp3') or f.endswith('.wav')])
-    if not songs:
-        raise RuntimeError(f"No songs found in channel {ch} at {path}")
-    tracks[ch] = songs
+channels, tracks = load_music(MUSIC_DIR)
 
 # Default State
 mode = "radio"  # Default mode is radio, change to "mt" for music therapy mode
@@ -60,7 +67,8 @@ last_states = {
 def get_current_path():
     ch = channels[current_channel]
     fname = tracks[ch][current_track]
-    return os.path.join(MUSIC_DIR, ch, fname)
+    base_dir = MT_MUSIC_DIR if mode == "mt" else MUSIC_DIR
+    return os.path.join(base_dir, ch, fname)
 
 # Play the current song
 def play_current():
@@ -95,21 +103,50 @@ def toggle_pause():
 
 # Mode switching logic
 def switch_to_mt():
-    global mode
+    global mode, channels, tracks, current_channel, current_track
     mode = "mt"
     pygame.mixer.music.stop()  # Stop current playback
     print("[Mode] -> Music Therapy Mode")
 
-    '''
-    @Farbod You can start/edit your code from here regarding music therapy mode (when red button is pressed)
-    
-    
-    '''
+    try:
+        # Check if the music therapy directory is empty or doesn't exist
+        if not os.path.exists(MT_MUSIC_DIR) or not os.listdir(MT_MUSIC_DIR):
+            print(f"{MT_MUSIC_DIR} is empty or not found. Copying music from USB via API...")
+            
+            # Use the API to copy files from USB to music therapy directory
+            try:
+                response = requests.post("http://localhost:5000/usb/copy")
+                response.raise_for_status()  # Raise an exception for bad status codes
+                data = response.json()
+                print(f"API Response: {data.get('message', 'Files copied successfully')}")
+
+            except requests.exceptions.RequestException as e:
+                print(f"Error contacting server for file copy: {e}")
+                # Handle error: maybe switch back to radio or play a default sound
+                return
+            except Exception as e:
+                print(f"Error copying files via API: {e}")
+                return
+
+        # Load music from the music therapy directory
+        channels, tracks = load_music(MT_MUSIC_DIR)
+        current_channel = 0
+        current_track = 0
+        play_current()
+
+    except Exception as e:
+        print(f"An error occurred in music therapy mode: {e}")
+        # Optionally, switch back to radio mode as a fallback
+        switch_to_radio()
 
 def switch_to_radio():
-    global mode
+    global mode, channels, tracks, current_channel, current_track
     mode = "radio"
     print("[Mode] -> Radio Mode")
+    # Reload radio music
+    channels, tracks = load_music(MUSIC_DIR)
+    current_channel = 0
+    current_track = 0
     play_current()  # Start playing the first song in radio mode
 
 # Start playback
