@@ -1,8 +1,7 @@
-# This script plays the songs with input from arrow and pause buttons
+# This script plays the songs with keyboard input controls
 import pygame
 import time
 import os
-import RPi.GPIO as GPIO
 import requests
 
 # Paths and Constants
@@ -10,25 +9,20 @@ MUSIC_DIR = "/home/suzen/Music" # Change to your pi zero music directory, e.g. /
 MT_MUSIC_DIR = "/music/mt"
 DEBOUNCE_TIME = 0.5 # Time in seconds to ignore additional presses
 
-# GPIO Pins
-ENCODER_CLK = 23  # CLK pin of rotary encoder
-ENCODER_DT = 24   # DT pin of rotary encoder
-RED_BUTTON = 27 # Formerly used for forward button, now used to enable music therapy mode
-GREEN_BUTTON = 22 # Formerly used for back button, now used to enable regular radio mode
-PAUSE_BUTTON = 17 # Pause button, used to pause and resume playback
+# Keyboard Controls:
+# Left/Right arrows: Change channels
+# Space: Pause/Resume
+# R: Radio mode
+# M: Music therapy mode
 
-# Setup GPIO
-# Pull-up resistor, reads high when untouched, drops to low when pressed
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(ENCODER_CLK, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-GPIO.setup(ENCODER_DT, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-GPIO.setup(RED_BUTTON, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-GPIO.setup(GREEN_BUTTON, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-GPIO.setup(PAUSE_BUTTON, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-
-# Initialize Pygame Mixer
+# Initialize Pygame Mixer and display
+pygame.init()
 pygame.mixer.init()
 pygame.mixer.music.set_volume(1.0) # Set volume to max
+
+# Create a small window for keyboard input
+screen = pygame.display.set_mode((400, 200))
+pygame.display.set_caption("Chummy Music Player - Press keys to control")
 
 def load_music(music_directory):
     """Loads music channels and tracks from a directory."""
@@ -54,14 +48,8 @@ current_channel = 0 # index into channels
 current_track = 0 # index into tracks
 paused = False
 
-# Debounce tracking
-last_times = {"red": 0.0, "green": 0.0, "pause": 0.0, "clk": 0.0} # timestamp of the last accepted event for each control
-last_states = {
-    "red": GPIO.HIGH,
-    "green": GPIO.HIGH,
-    "pause": GPIO.HIGH,
-    "clk": GPIO.input(ENCODER_CLK),
-} # previous GPIO readings, so we can detect edges
+# Debounce tracking for keyboard events
+last_times = {"left": 0.0, "right": 0.0, "space": 0.0, "r": 0.0, "m": 0.0}
 
 # Helper functions
 def get_current_path():
@@ -75,7 +63,7 @@ def play_current():
     path = get_current_path()
     pygame.mixer.music.load(path)
     pygame.mixer.music.play()
-    print(f"[Radio] Playing: {channels[current_channel]}: {tracks[channels[current_channel]][current_track]}")
+    print(f"[{mode.upper()}] Playing: {channels[current_channel]}: {tracks[channels[current_channel]][current_track]}")
 
 def next_track():
     global current_track
@@ -95,10 +83,10 @@ def toggle_pause():
     global paused
     if paused:
         pygame.mixer.music.unpause()
-        print("[Radio] Resumed")
+        print(f"[{mode.upper()}] Resumed")
     else:
         pygame.mixer.music.pause()
-        print("[Radio] Paused")
+        print(f"[{mode.upper()}] Paused")
     paused = not paused
 
 # Mode switching logic
@@ -142,6 +130,7 @@ def switch_to_mt():
 def switch_to_radio():
     global mode, channels, tracks, current_channel, current_track
     mode = "radio"
+    pygame.mixer.music.stop()  # Stop current playback
     print("[Mode] -> Radio Mode")
     # Reload radio music
     channels, tracks = load_music(MUSIC_DIR)
@@ -149,58 +138,66 @@ def switch_to_radio():
     current_track = 0
     play_current()  # Start playing the first song in radio mode
 
-# Start playback
+# Start playbook
 print(f"Found channels: {channels}\nStarting in RADIO mode")
+print("Controls:")
+print("  Left/Right arrows: Change channels")
+print("  Space: Pause/Resume")
+print("  R: Radio mode")
+print("  M: Music therapy mode")
+print("  ESC or Q: Quit")
 play_current()
 
-# Main loop to handle button presses and rotary encoder
+# Main loop to handle keyboard events
 try:
-    while True:
+    clock = pygame.time.Clock()
+    running = True
+    
+    while running:
         now = time.time()
-
-        # Read all pins once
-        red_state = GPIO.input(RED_BUTTON)
-        green_state = GPIO.input(GREEN_BUTTON)
-        pause_state = GPIO.input(PAUSE_BUTTON)
-        clk_state = GPIO.input(ENCODER_CLK)
-        dt_state = GPIO.input(ENCODER_DT)
-
-        # Mode switching by switching a high -> low transition and enforce a debounce time
-        if red_state == GPIO.LOW and last_states["red"] == GPIO.HIGH and now - last_times["red"] >= DEBOUNCE_TIME:
-            switch_to_mt()
-            last_times["red"] = now
-        last_states["red"] = red_state
-
-        if green_state == GPIO.LOW and last_states["green"] == GPIO.HIGH and now - last_times["green"] >= DEBOUNCE_TIME:
-            switch_to_radio()
-            last_times["green"] = now
-        last_states["green"] = green_state
-
-        # Radio mode controls
-        if mode == "radio":
-            # Rotary encoder rotation -> next/previous song
-            if clk_state != last_states["clk"] and now - last_times["clk"] >= DEBOUNCE_TIME:
-                if dt_state != clk_state: # means we turned in one direction (next channel)
+        
+        # Handle pygame events
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.KEYDOWN:
+                # Mode switching
+                if event.key == pygame.K_r and now - last_times["r"] >= DEBOUNCE_TIME:
+                    switch_to_radio()
+                    last_times["r"] = now
+                elif event.key == pygame.K_m and now - last_times["m"] >= DEBOUNCE_TIME:
+                    switch_to_mt()
+                    last_times["m"] = now
+                
+                # Channel switching (left/right arrows)
+                elif event.key == pygame.K_LEFT and now - last_times["left"] >= DEBOUNCE_TIME:
+                    switch_channel(-1)
+                    last_times["left"] = now
+                elif event.key == pygame.K_RIGHT and now - last_times["right"] >= DEBOUNCE_TIME:
                     switch_channel(+1)
-                else:
-                    switch_channel(-1) # means we turned in the other direction (previous channel)
-                last_times["clk"] = now
-            last_states["clk"] = clk_state
+                    last_times["right"] = now
+                
+                # Pause/resume (space)
+                elif event.key == pygame.K_SPACE and now - last_times["space"] >= DEBOUNCE_TIME:
+                    toggle_pause()
+                    last_times["space"] = now
+                
+                # Quit (ESC or Q)
+                elif event.key == pygame.K_ESCAPE or event.key == pygame.K_q:
+                    running = False
 
-            # Pause/resume playback, uses the same high -> low transition debounce pattern
-            if pause_state == GPIO.LOW and last_states["pause"] == GPIO.HIGH and now - last_times["pause"] >= DEBOUNCE_TIME:
-                toggle_pause()
-                last_times["pause"] = now
-            last_states["pause"] = pause_state
+        # Auto-advance when a track ends (only in radio mode when not paused)
+        if mode == "radio" and not pygame.mixer.music.get_busy() and not paused:
+            next_track()
 
-            # Auto-advance when a track ends
-            if not pygame.mixer.music.get_busy() and not paused:
-                next_track()
-
-        # Sleep a bit to avoid busy-waiting
-        time.sleep(0.05)
+        # Update display
+        screen.fill((0, 0, 0))  # Clear screen with black
+        pygame.display.flip()
+        
+        # Control frame rate
+        clock.tick(30)
   
 except KeyboardInterrupt:
     print("Exiting...")
 finally:
-    GPIO.cleanup()
+    pygame.quit()
