@@ -5,8 +5,8 @@ import os
 import requests
 
 # Paths and Constants
-MUSIC_DIR = "/home/suzen/Music" # Change to your pi zero music directory, e.g. /home/pi/Music
-MT_MUSIC_DIR = "/music/mt"
+MUSIC_DIR = "/home/farbod/Music/radio" # Change to your pi zero music directory, e.g. /home/pi/Music
+MT_MUSIC_DIR = "/home/farbod/Music/mt"
 DEBOUNCE_TIME = 0.5 # Time in seconds to ignore additional presses
 
 # Keyboard Controls:
@@ -26,17 +26,21 @@ pygame.display.set_caption("Chummy Music Player - Press keys to control")
 
 def load_music(music_directory):
     """Loads music channels and tracks from a directory."""
-    channels = sorted([d for d in os.listdir(music_directory) if os.path.isdir(os.path.join(music_directory, d))])
-    if not channels:
-        raise RuntimeError(f"No channels (folders) found in the {music_directory}")
+    all_dirs = sorted([d for d in os.listdir(music_directory) if os.path.isdir(os.path.join(music_directory, d))])
     
+    channels = []
     tracks = {}
-    for ch in channels:
+    
+    for ch in all_dirs:
         path = os.path.join(music_directory, ch)
         songs = sorted([f for f in os.listdir(path) if f.endswith('.mp3') or f.endswith('.wav')])
-        if not songs:
-            raise RuntimeError(f"No songs found in channel {ch} at {path}")
-        tracks[ch] = songs
+        if songs:  # Only include channels that have songs
+            channels.append(ch)
+            tracks[ch] = songs
+    
+    if not channels:
+        raise RuntimeError(f"No channels with songs found in the {music_directory}")
+    
     return channels, tracks
 
 # Load channels and songs

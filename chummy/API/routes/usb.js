@@ -4,8 +4,8 @@ const fs = require("fs");
 const path = require("path");
 const { exec } = require("child_process");
 
-const USB_PATH = "/mnt/usb";
-const MUSIC_PATH = "/music/mt";
+const USB_PATH = "/media/farbod/128 GB";
+const MUSIC_PATH = "/home/farbod/Music/mt";
 
 router.get("/", (req, res) => {
   // You could add checks here to see if the path exists
