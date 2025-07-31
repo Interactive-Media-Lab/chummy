@@ -5,7 +5,7 @@
 # Exit immediately if a command exits with a non-zero status.
 set -e
 
-MOUNT_POINT="/mnt/usb"
+MOUNT_POINT="/media/suzen/ESD-USB"
 
 # Find the first available block device that is not the main SD card (mmcblk0)
 # and is not already mounted. We assume this is the USB drive.

@@ -1,207 +1,213 @@
-# This script plays the songs with keyboard input controls
+# This script plays songs in Radio (ChummyC*) and MT (MT*) modes with button & encoder controls
 import pygame
 import time
 import os
-import requests
+import RPi.GPIO as GPIO
+import shutil
 
 # Paths and Constants
-MUSIC_DIR = "/home/farbod/Music/radio" # Change to your pi zero music directory, e.g. /home/pi/Music
-MT_MUSIC_DIR = "/home/farbod/Music/mt"
-DEBOUNCE_TIME = 0.5 # Time in seconds to ignore additional presses
+MUSIC_DIR       = "/home/suzen/Music"
+USB_MUSIC_DIR   = "/media/suzen/ESD-USB"
+DEBOUNCE_TIME   = 0.5  # Time in seconds to ignore additional presses
 
-# Keyboard Controls:
-# Left/Right arrows: Change channels
-# Space: Pause/Resume
-# R: Radio mode
-# M: Music therapy mode
+# GPIO pin assignments
+ENCODER_CLK  = 23
+ENCODER_DT   = 24
+RED_BUTTON   = 27  # Mode switch / Next in MT
+GREEN_BUTTON = 22  # Back to Radio
+PAUSE_BUTTON = 17  # Pause/Resume
 
-# Initialize Pygame Mixer and display
-pygame.init()
+# Setup GPIO
+# Pull-up resistors, reads high when touched, drops to low when pressed
+GPIO.setmode(GPIO.BCM)
+for pin in (ENCODER_CLK, ENCODER_DT, RED_BUTTON, GREEN_BUTTON, PAUSE_BUTTON):
+    GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+# Initialize Pygame mixer
 pygame.mixer.init()
-pygame.mixer.music.set_volume(1.0) # Set volume to max
+pygame.mixer.music.set_volume(1.0)
 
-# Create a small window for keyboard input
-screen = pygame.display.set_mode((400, 200))
-pygame.display.set_caption("Chummy Music Player - Press keys to control")
-
-def load_music(music_directory):
-    """Loads music channels and tracks from a directory."""
-    all_dirs = sorted([d for d in os.listdir(music_directory) if os.path.isdir(os.path.join(music_directory, d))])
-    
-    channels = []
-    tracks = {}
-    
-    for ch in all_dirs:
-        path = os.path.join(music_directory, ch)
-        songs = sorted([f for f in os.listdir(path) if f.endswith('.mp3') or f.endswith('.wav')])
-        if songs:  # Only include channels that have songs
-            channels.append(ch)
-            tracks[ch] = songs
-    
+# Helper to load channels/tracks
+def load_music(directory, prefix=None):
+    """
+    Returns (channels_list, tracks_dict) for subfolders starting with prefix
+    """
+    channels = sorted([
+        d for d in os.listdir(directory)
+        if os.path.isdir(os.path.join(directory, d)) and (prefix is None or d.startswith(prefix))
+    ])
     if not channels:
-        raise RuntimeError(f"No channels with songs found in the {music_directory}")
-    
+        raise RuntimeError(f"No folders in {directory} matching prefix '{prefix}'")
+    tracks = {}
+    for ch in channels:
+        folder_path = os.path.join(directory, ch)
+        songs = sorted([f for f in os.listdir(folder_path) if f.lower().endswith(('.mp3','.wav'))])
+        if not songs:
+            raise RuntimeError(f"No audio files in {folder_path}")
+        tracks[ch] = songs
     return channels, tracks
 
-# Load channels and songs
-channels, tracks = load_music(MUSIC_DIR)
+# Radio Playback Functions
+radio_channels, radio_tracks = [], {}
+current_channel = 0
+current_track   = 0
 
-# Default State
-mode = "radio"  # Default mode is radio, change to "mt" for music therapy mode
-current_channel = 0 # index into channels
-current_track = 0 # index into tracks
-paused = False
-
-# Debounce tracking for keyboard events
-last_times = {"left": 0.0, "right": 0.0, "space": 0.0, "r": 0.0, "m": 0.0}
-
-# Helper functions
-def get_current_path():
-    ch = channels[current_channel]
-    fname = tracks[ch][current_track]
-    base_dir = MT_MUSIC_DIR if mode == "mt" else MUSIC_DIR
-    return os.path.join(base_dir, ch, fname)
-
-# Play the current song
-def play_current():
-    path = get_current_path()
+def play_current_radio():
+    ch = radio_channels[current_channel]
+    song = radio_tracks[ch][current_track]
+    path = os.path.join(MUSIC_DIR, ch, song)
     pygame.mixer.music.load(path)
     pygame.mixer.music.play()
-    print(f"[{mode.upper()}] Playing: {channels[current_channel]}: {tracks[channels[current_channel]][current_track]}")
+    print(f"[Radio] {ch}: {song}")
 
-def next_track():
+def next_radio_track():
     global current_track
-    tl = tracks[channels[current_channel]]
-    current_track = (current_track + 1) % len(tl)  # Loop back to the first song
-    play_current()
+    current_track = (current_track + 1) % len(radio_tracks[radio_channels[current_channel]])
+    play_current_radio()
 
-# Play the next or previous channel of songs
-def switch_channel(delta):
+def switch_radio_channel(delta):
     global current_channel, current_track
-    current_channel = (current_channel + delta) % len(channels)  # Wrap around
-    current_track = 0  # Reset to the first song in the new channel
-    play_current()
+    current_channel = (current_channel + delta) % len(radio_channels)
+    current_track   = 0
+    play_current_radio()
 
-# Pause or resume playback
+# MT Playback Functions
+mt_channels, mt_tracks = [], {}
+mt_folder_index = 0
+mt_song_index   = -1
+mt_playing      = False
+
+def play_next_mt():
+    global mt_folder_index, mt_song_index, mt_playing, paused
+    folder = mt_channels[mt_folder_index]
+    songs  = mt_tracks[folder]
+    mt_song_index += 1
+    if mt_song_index >= len(songs):
+        mt_song_index    = 0
+        mt_folder_index = (mt_folder_index + 1) % len(mt_channels)
+        folder = mt_channels[mt_folder_index]
+        songs  = mt_tracks[folder]
+    path = os.path.join(MUSIC_DIR, folder, songs[mt_song_index])
+    pygame.mixer.music.load(path)
+    pygame.mixer.music.play()
+    print(f"[MT] {folder}: {songs[mt_song_index]}")
+    mt_playing = True
+    paused     = False
+
+# Shared Controls
+paused = False
 def toggle_pause():
     global paused
     if paused:
         pygame.mixer.music.unpause()
-        print(f"[{mode.upper()}] Resumed")
+        print("[Paused] Resumed")
     else:
         pygame.mixer.music.pause()
-        print(f"[{mode.upper()}] Paused")
+        print("[Paused] Paused")
     paused = not paused
 
-# Mode switching logic
-def switch_to_mt():
-    global mode, channels, tracks, current_channel, current_track
-    mode = "mt"
-    pygame.mixer.music.stop()  # Stop current playback
-    print("[Mode] -> Music Therapy Mode")
+# Initial Load
+mode = 'radio'
+try:
+    radio_channels, radio_tracks = load_music(MUSIC_DIR, prefix='ChummyC')
+    print(f"Found Radio channels: {radio_channels}")
+    play_current_radio()
+except Exception as e:
+    print(f"Error loading radio: {e}")
+    exit(1)
 
-    try:
-        # Check if the music therapy directory is empty or doesn't exist
-        if not os.path.exists(MT_MUSIC_DIR) or not os.listdir(MT_MUSIC_DIR):
-            print(f"{MT_MUSIC_DIR} is empty or not found. Copying music from USB via API...")
-            
-            # Use the API to copy files from USB to music therapy directory
-            try:
-                response = requests.post("http://localhost:5000/usb/copy")
-                response.raise_for_status()  # Raise an exception for bad status codes
-                data = response.json()
-                print(f"API Response: {data.get('message', 'Files copied successfully')}")
+# Debounce state
+last_times  = {'red':0.0,'green':0.0,'pause':0.0,'clk':0.0}
+last_states = {'red':GPIO.HIGH,'green':GPIO.HIGH,'pause':GPIO.HIGH,'clk':GPIO.input(ENCODER_CLK)}
 
-            except requests.exceptions.RequestException as e:
-                print(f"Error contacting server for file copy: {e}")
-                # Handle error: maybe switch back to radio or play a default sound
-                return
-            except Exception as e:
-                print(f"Error copying files via API: {e}")
-                return
-
-        # Load music from the music therapy directory
-        channels, tracks = load_music(MT_MUSIC_DIR)
-        current_channel = 0
-        current_track = 0
-        play_current()
-
-    except Exception as e:
-        print(f"An error occurred in music therapy mode: {e}")
-        # Optionally, switch back to radio mode as a fallback
-        switch_to_radio()
-
-def switch_to_radio():
-    global mode, channels, tracks, current_channel, current_track
-    mode = "radio"
-    pygame.mixer.music.stop()  # Stop current playback
-    print("[Mode] -> Radio Mode")
-    # Reload radio music
-    channels, tracks = load_music(MUSIC_DIR)
-    current_channel = 0
-    current_track = 0
-    play_current()  # Start playing the first song in radio mode
-
-# Start playbook
-print(f"Found channels: {channels}\nStarting in RADIO mode")
-print("Controls:")
-print("  Left/Right arrows: Change channels")
-print("  Space: Pause/Resume")
-print("  R: Radio mode")
-print("  M: Music therapy mode")
-print("  ESC or Q: Quit")
-play_current()
-
-# Main loop to handle keyboard events
+# Main Loop
 try:
     clock = pygame.time.Clock()
     running = True
     
     while running:
         now = time.time()
-        
-        # Handle pygame events
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.KEYDOWN:
-                # Mode switching
-                if event.key == pygame.K_r and now - last_times["r"] >= DEBOUNCE_TIME:
-                    switch_to_radio()
-                    last_times["r"] = now
-                elif event.key == pygame.K_m and now - last_times["m"] >= DEBOUNCE_TIME:
-                    switch_to_mt()
-                    last_times["m"] = now
-                
-                # Channel switching (left/right arrows)
-                elif event.key == pygame.K_LEFT and now - last_times["left"] >= DEBOUNCE_TIME:
-                    switch_channel(-1)
-                    last_times["left"] = now
-                elif event.key == pygame.K_RIGHT and now - last_times["right"] >= DEBOUNCE_TIME:
-                    switch_channel(+1)
-                    last_times["right"] = now
-                
-                # Pause/resume (space)
-                elif event.key == pygame.K_SPACE and now - last_times["space"] >= DEBOUNCE_TIME:
-                    toggle_pause()
-                    last_times["space"] = now
-                
-                # Quit (ESC or Q)
-                elif event.key == pygame.K_ESCAPE or event.key == pygame.K_q:
-                    running = False
+        r   = GPIO.input(RED_BUTTON)
+        g   = GPIO.input(GREEN_BUTTON)
+        p   = GPIO.input(PAUSE_BUTTON)
+        clk = GPIO.input(ENCODER_CLK)
+        dt  = GPIO.input(ENCODER_DT)
 
-        # Auto-advance when a track ends (only in radio mode when not paused)
-        if mode == "radio" and not pygame.mixer.music.get_busy() and not paused:
-            next_track()
+        # RED button: switch mode or next MT --
+        if r==GPIO.LOW and last_states['red']==GPIO.HIGH and now-last_times['red']>=DEBOUNCE_TIME:
+            if mode == 'radio':
+                # Switch into MT
+                mode = 'mt'
+                pygame.mixer.music.stop()
+                print("[Mode] -> MT")
+                # Copy new MT from USB
+                copied = False
+                for d in os.listdir(USB_MUSIC_DIR):
+                    if d.startswith('MT'):
+                        src = os.path.join(USB_MUSIC_DIR, d)
+                        dst = os.path.join(MUSIC_DIR, d)
+                        if not os.path.exists(dst) or not os.listdir(dst):
+                            shutil.copytree(src, dst, dirs_exist_ok=True)
+                            copied = True
+                if not copied:
+                    print("No new MT on USB, skipped copy")
+                # Load MT channels
+                try:
+                    mt_channels, mt_tracks = load_music(MUSIC_DIR, prefix='MT')
+                except Exception as e:
+                    print(f"MT load error: {e}")
+                    mode = 'radio'
+                    continue
+                mt_folder_index = 0
+                mt_song_index   = -1
+                mt_playing      = False
+                paused          = False
+                # Play first MT track
+                play_next_mt()
+            elif mode == 'mt':
+                # Next MT
+                play_next_mt()
+            last_times['red'] = now
+        last_states['red'] = r
 
-        # Update display
-        screen.fill((0, 0, 0))  # Clear screen with black
-        pygame.display.flip()
-        
-        # Control frame rate
-        clock.tick(30)
-  
+        # GREEN button: back to Radio
+        if g==GPIO.LOW and last_states['green']==GPIO.HIGH and now-last_times['green']>=DEBOUNCE_TIME:
+            mode = 'radio'
+            print("[Mode] -> Radio")
+            current_channel = 0
+            current_track   = 0
+            play_current_radio()
+            last_times['green'] = now
+        last_states['green'] = g
+
+        # GLOBAL Pause/Resume
+        if p==GPIO.LOW and last_states['pause']==GPIO.HIGH and now-last_times['pause']>=DEBOUNCE_TIME:
+            toggle_pause()
+            last_times['pause'] = now
+        last_states['pause'] = p
+
+        # Rotary & Auto-advance
+        if mode == 'radio':
+            # Encoder: change channel
+            if clk!=last_states['clk'] and now-last_times['clk']>=DEBOUNCE_TIME:
+                if dt!=clk:
+                    switch_radio_channel(+1)
+                else:
+                    switch_radio_channel(-1)
+                last_times['clk'] = now
+            last_states['clk'] = clk
+            # End-of-track -> next
+            if not pygame.mixer.music.get_busy() and not paused:
+                next_radio_track()
+
+        else:  # MT mode
+            # End-of-track -> next MT
+            if mt_playing and not pygame.mixer.music.get_busy() and not paused:
+                play_next_mt()
+
+        time.sleep(0.05)
+
 except KeyboardInterrupt:
-    print("Exiting...")
+    print("Exiting…")
 finally:
     pygame.quit()
