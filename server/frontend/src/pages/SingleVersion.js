@@ -1,3 +1,4 @@
+// This file is ONLY for single chummy version WITHOUT connecting to the backend/actual CHUMMY unit
 import "../App.css";
 import React, { useState, useRef, useEffect } from 'react';
 
@@ -24,7 +25,7 @@ const SingleVersion = ({ audioSrc }) => {
   const [duration, setDuration]       = useState(0);
   const audioRef = useRef(null);
 
-  // --- Handlers for audio (unchanged) ---
+  // --- Handlers for audio ---
   const handleSeek = e => {
     audioRef.current.currentTime = e.target.value;
     setCurrentTime(e.target.value);
@@ -68,7 +69,7 @@ const SingleVersion = ({ audioSrc }) => {
     const fetchPlaylists = async () => {
       try {
         setLoading(true);
-        const response = await fetch("http://raspberrypi:5000/playlists");
+        const response = await fetch("http://172.20.10.3:5001/playlists");
         
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -150,7 +151,7 @@ const SingleVersion = ({ audioSrc }) => {
   return (
     <div className="center-wrapper">
       <div className="outer-box">
-        <h1 style={{ textAlign: 'center' }}>Room Dashboard (Single-chummy)</h1>
+        <h1 style={{ textAlign: 'center' }}>Room Dashboard (UI Example ONLY)</h1>
 
         <div className="room-grid-2col">
           {/* BPSD Event Log */}
